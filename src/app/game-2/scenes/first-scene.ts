@@ -9,8 +9,12 @@ import {
   PLAYER_BOUNCE,
   STAR_VALUE,
   STAR_COUNT,
-  STAR_STEP_X,
   TIME_BONUS_PER_SECOND,
+  WORLD_WIDTH,
+  CAMERA_LERP_X,
+  CAMERA_LERP_Y,
+  CAMERA_DEADZONE_W,
+  CAMERA_DEADZONE_H,
 } from '../game-tunbles';
 
 type GameOverReason = 'bomb' | 'time-up';
@@ -84,6 +88,7 @@ export class FirstScene extends Phaser.Scene {
     this.createBackground();
     this.createPlatforms();
     this.createPlayer();
+    this.createCamera();
     this.createAnimations();
     this.createInput();
     this.createStars();
@@ -124,19 +129,31 @@ export class FirstScene extends Phaser.Scene {
   }
 
   private createBackground(): void {
-    this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'sky');
+    this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'sky').setScrollFactor(0);
   }
 
   private createPlatforms(): void {
     this.platforms = this.physics.add.staticGroup();
 
     this.platforms
-      .create(GAME_WIDTH / 2, GAME_HEIGHT - 32, 'ground')
+      .create(400, GAME_HEIGHT - 32, 'ground')
       .setScale(2)
       .refreshBody();
-    this.platforms.create(600, 400, 'ground');
+    this.platforms
+      .create(1200, GAME_HEIGHT - 32, 'ground')
+      .setScale(2)
+      .refreshBody();
+    this.platforms
+      .create(2000, GAME_HEIGHT - 32, 'ground')
+      .setScale(2)
+      .refreshBody();
     this.platforms.create(50, 250, 'ground');
-    this.platforms.create(GAME_WIDTH - 50, 220, 'ground');
+    this.platforms.create(600, 400, 'ground');
+    this.platforms.create(750, 220, 'ground');
+    this.platforms.create(1100, 420, 'ground');
+    this.platforms.create(1450, 300, 'ground');
+    this.platforms.create(1800, 380, 'ground');
+    this.platforms.create(2250, 250, 'ground');
   }
 
   private createPlayer(): void {
@@ -145,6 +162,13 @@ export class FirstScene extends Phaser.Scene {
     this.player.setCollideWorldBounds(true);
 
     this.physics.add.collider(this.player, this.platforms);
+  }
+
+  private createCamera(): void {
+    this.physics.world.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
+    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
+    this.cameras.main.setDeadzone(CAMERA_DEADZONE_W, CAMERA_DEADZONE_H);
+    this.cameras.main.startFollow(this.player, true, CAMERA_LERP_X, CAMERA_LERP_Y);
   }
 
   private createAnimations(): void {
@@ -180,7 +204,7 @@ export class FirstScene extends Phaser.Scene {
     this.stars = this.physics.add.group({
       key: 'star',
       repeat: STAR_COUNT - 1,
-      setXY: { x: 12, y: 0, stepX: STAR_STEP_X },
+      setXY: { x: 120, y: 0, stepX: (WORLD_WIDTH - 240) / (STAR_COUNT - 1) },
     });
 
     this.applyStarBounce();
@@ -211,15 +235,18 @@ export class FirstScene extends Phaser.Scene {
   private createHud(): void {
     this.scoreText = this.add
       .text(16, 16, `Score: ${this.score}`, { fontSize: '24px', color: '#ffffff' })
+      .setScrollFactor(0)
       .setDepth(10);
 
     this.levelText = this.add
       .text(GAME_WIDTH / 2, 16, `Level ${this.level}`, { fontSize: '24px', color: '#a78bfa' })
+      .setScrollFactor(0)
       .setOrigin(0.5, 0)
       .setDepth(10);
 
     this.timerText = this.add
       .text(GAME_WIDTH - 16, 16, '', { fontSize: '24px', color: '#fbbf24' })
+      .setScrollFactor(0)
       .setOrigin(1, 0)
       .setDepth(10);
   }
@@ -274,16 +301,14 @@ export class FirstScene extends Phaser.Scene {
       return;
     }
 
-    const spawnFarFromPlayer =
-      this.player.x < GAME_WIDTH / 2
-        ? Phaser.Math.Between(GAME_WIDTH / 2, GAME_WIDTH)
-        : Phaser.Math.Between(0, GAME_WIDTH / 2);
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const spawnX = Phaser.Math.Clamp(
+      this.player.x + side * (GAME_WIDTH / 2 + 80),
+      40,
+      WORLD_WIDTH - 40,
+    );
 
-    const bomb = this.bombs.create(
-      spawnFarFromPlayer,
-      BOMB_SPAWN_Y,
-      'bomb',
-    ) as Phaser.Physics.Arcade.Image;
+    const bomb = this.bombs.create(spawnX, BOMB_SPAWN_Y, 'bomb') as Phaser.Physics.Arcade.Image;
     bomb.setBounce(1);
     bomb.setCollideWorldBounds(true);
     bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
@@ -309,6 +334,7 @@ export class FirstScene extends Phaser.Scene {
     if (reason === 'bomb') {
       this.player.setTint(0xff0000);
       this.player.anims.play('turn');
+      this.cameras.main.shake(200, 0.01);
     }
 
     const timeBonus = Math.floor(this.timeLeft * TIME_BONUS_PER_SECOND);
@@ -321,7 +347,7 @@ export class FirstScene extends Phaser.Scene {
       subtitle: reasonLabel,
       stats: [`Stars: ${this.score}`, `Time bonus: +${timeBonus}`, `Total score: ${totalScore}`],
       hint: 'Press SPACE / ENTER or click to restart',
-      onConfirm: () => this.scene.restart(),
+      onConfirm: () => this.scene.restart({ level: this.level, carriedScore: this.carriedScore }),
     });
   }
 
@@ -354,9 +380,13 @@ export class FirstScene extends Phaser.Scene {
   private showDialog(options: DialogOptions): void {
     this.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.55)
+      .setScrollFactor(0)
       .setDepth(20);
 
-    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 460, 320, 0x1e293b, 0.95).setDepth(21);
+    this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 460, 320, 0x1e293b, 0.95)
+      .setScrollFactor(0)
+      .setDepth(21);
 
     this.add
       .text(GAME_WIDTH / 2, 190, options.title, {
@@ -364,11 +394,13 @@ export class FirstScene extends Phaser.Scene {
         color: options.titleColor,
         fontStyle: 'bold',
       })
+      .setScrollFactor(0)
       .setOrigin(0.5)
       .setDepth(22);
 
     this.add
       .text(GAME_WIDTH / 2, 250, options.subtitle, { fontSize: '20px', color: '#f8fafc' })
+      .setScrollFactor(0)
       .setOrigin(0.5)
       .setDepth(22);
 
@@ -379,11 +411,13 @@ export class FirstScene extends Phaser.Scene {
         align: 'center',
         lineSpacing: 10,
       })
+      .setScrollFactor(0)
       .setOrigin(0.5)
       .setDepth(22);
 
     this.add
       .text(GAME_WIDTH / 2, 420, options.hint, { fontSize: '18px', color: '#94a3b8' })
+      .setScrollFactor(0)
       .setOrigin(0.5)
       .setDepth(22);
     this.input.once('pointerdown', options.onConfirm, this);
