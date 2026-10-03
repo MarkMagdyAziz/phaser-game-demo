@@ -1,0 +1,84 @@
+:host {
+  display: block;
+  height: 100%;
+  min-height: 100dvh;
+}
+
+.game-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.game-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.game-container canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.hud {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 150px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.72);
+  color: #e2e8f0;
+  font:
+    600 12px/1.2 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+
+.hud-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hud-item--final .hud-value {
+  color: #facc15;
+}
+
+.hud-label {
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.hud-value {
+  color: #f8fafc;
+}
+
+.hud-button {
+  margin-top: 4px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #38bdf8;
+  background: #0ea5e9;
+  color: #04222f;
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.hud-button:hover {
+  background: #38bdf8;
+}

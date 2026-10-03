@@ -1,0 +1,16 @@
+export const ASSET_KEYS = {
+  player: 'player',
+  snow: 'snow',
+  tree: 'obstacle-tree',
+  rock: 'obstacle-rock',
+  snowPile: 'obstacle-snow-pile',
+  ramp: 'obstacle-ramp',
+  wolf: 'animal-wolf',
+  coin: 'coin',
+  bgSky: 'bg-sky',
+  bgCloud: 'bg-cloud',
+  bgFar: 'bg-far',
+  bgMid: 'bg-mid',
+  bgSnow: 'bg-snow',
+  particle: 'particle',
+} as const;
