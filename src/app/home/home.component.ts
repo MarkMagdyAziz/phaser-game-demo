@@ -12,8 +12,8 @@ export class HomeComponent {
   protected readonly title = signal('-fe-change0title');
 
   protected readonly pills = [
-
     { title: 'Demo Game', link: '/game' },
     { title: 'Demo Game 2', link: '/game-2' },
+    { title: 'Demo Game 3 (Ski)', link: '/game-3' },
   ];
 }
