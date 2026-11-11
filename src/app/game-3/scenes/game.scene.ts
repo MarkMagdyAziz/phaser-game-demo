@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
-import { ASSET_KEYS } from '../asset-keys';
+import { ASSET_KEYS, FONT_FAMILIES } from '../entities/asset-keys';
+import { applyAssetSpec } from '../asset-specs';
 import {
-  AIR_HORIZONTAL_SPEED,
   CAMERA_DEADZONE_H,
   CAMERA_DEADZONE_W,
   CAMERA_LERP_X,
@@ -9,27 +9,31 @@ import {
   CHUNK_LOOK_AHEAD,
   CHUNK_KEEP_BEHIND,
   CHUNK_WIDTH,
-  CRASH_COOLDOWN_MS,
   CRASH_TINT,
   DOWNHILL_PUSH,
   ENDLESS_WIDTH,
-  LANDING_ALIGN_TOLERANCE,
-  LANDING_LOCK_MS,
+  HUD_MUTED_TEXT_SIZE,
+  HUD_PANEL_HEIGHT,
+  HUD_PANEL_WIDTH,
+  HUD_TEXT_SIZE,
+  MIN_FORWARD_SPEED,
+  OVERLAY_TEXT_SIZE,
   PLAYER_JUMP_VELOCITY,
   PLAYER_MOVE_VELOCITY,
   PLAYER_RAMP_LAUNCH_VELOCITY,
+  PLAYER_SCALE,
   PLAYER_SPAWN_X,
   SCORE_EVENT_STEP,
-  SPIN_SPEED,
   SURFACE_AMP_LARGE,
   SURFACE_AMP_SMALL,
   SURFACE_MID_Y,
   SURFACE_PERIOD_LARGE,
   SURFACE_PERIOD_SMALL,
   SURFACE_TOLERANCE,
+  WOLF_RIDE_DISTANCE,
   WORLD_HEIGHT,
 } from '../game-tunbles';
-import { TerrainConfig, TerrainGenerator } from '../systems/terrain-generator';
+import { TerrainChunk, TerrainConfig, TerrainGenerator } from '../systems/terrain-generator';
 import { ObstacleSystem } from '../systems/obstacle-system';
 import { AnimalSystem } from '../systems/animal-system';
 import { AnimalConfig, AnimalKind, ANIMAL_CONFIGS } from '../entities/animal';
@@ -40,7 +44,8 @@ import { BackgroundSystem } from '../systems/background-system';
 import { EffectsSystem } from '../systems/effects-system';
 import { AudioSystem } from '../systems/audio-system';
 import { InputSystem } from '../systems/input-system';
-import { GAME_EVENTS_KEY, GameEventBus, GameEventMap, GameEventName } from '../game-events';
+import { GameEventBus } from '../game-events';
+import { GAME_EVENTS_KEY, GameEventMap, GameEventName } from '../entities/events';
 
 const TERRAIN_CONFIG: TerrainConfig = {
   worldHeight: WORLD_HEIGHT,
@@ -51,15 +56,17 @@ const TERRAIN_CONFIG: TerrainConfig = {
   surfacePeriodSmall: SURFACE_PERIOD_SMALL,
 };
 
-const TAU = Math.PI * 2;
-
 enum PlayerState {
-  IDLE = 'IDLE',
   SKIING = 'SKIING',
   AIRBORNE = 'AIRBORNE',
-  LANDING = 'LANDING',
-  CRASHED = 'CRASHED',
 }
+
+/** Kenney frame per state. All frames share one 84x98 canvas, so switching
+ *  texture never disturbs the Arcade body. */
+const STATE_FRAME: Record<PlayerState, string> = {
+  [PlayerState.SKIING]: ASSET_KEYS.skierRide,
+  [PlayerState.AIRBORNE]: ASSET_KEYS.skierAir,
+};
 
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
@@ -76,42 +83,33 @@ export class GameScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
   private controls!: InputSystem;
 
-  private playerState: PlayerState = PlayerState.IDLE;
+  private playerState: PlayerState = PlayerState.SKIING;
   private wasGrounded = false;
-  private landingLockTime = 0;
-  private crashedUntil = 0;
   private runEnded = false;
   private lastScoredX = 0;
   private lastScoreBucket = -1;
 
   private mount: AnimalConfig | null = null;
+  private mountX = 0;
   private jumpsUsed = 0;
   private airTimeSeconds = 0;
 
-  private flips = 0;
-  private airRotationDelta = 0;
-  private prevAirRotation = 0;
-
-  private chunkPool: Phaser.GameObjects.Graphics[] = [];
-  private chunks = new Map<number, Phaser.GameObjects.Graphics>();
+  private chunkPool: TerrainChunk[] = [];
+  private chunks = new Map<number, TerrainChunk>();
 
   constructor() {
     super('GameScene');
   }
 
   create(): void {
-    this.playerState = PlayerState.IDLE;
+    this.playerState = PlayerState.SKIING;
     this.wasGrounded = false;
-    this.landingLockTime = 0;
-    this.crashedUntil = 0;
-    this.flips = 0;
-    this.airRotationDelta = 0;
-    this.prevAirRotation = 0;
 
     this.chunkPool = [];
     this.chunks = new Map();
     this.runEnded = false;
     this.mount = null;
+    this.mountX = 0;
     this.jumpsUsed = 0;
     this.airTimeSeconds = 0;
     this.lastScoredX = 0;
@@ -161,13 +159,18 @@ export class GameScene extends Phaser.Scene {
 
   private createPlayer(): void {
     const spawnX = PLAYER_SPAWN_X;
-    this.player = this.physics.add.sprite(
-      spawnX,
-      this.terrain.surfaceYAt(spawnX) - 40,
-      ASSET_KEYS.player,
-    );
+    const texture = ASSET_KEYS.skierRide;
+    // Spawn on the surface, already sliding: spawning above it left the player
+    // in the air pose for the first ~0.7s with no forward movement.
+    this.player = this.physics.add.sprite(spawnX, this.terrain.surfaceYAt(spawnX), texture);
+    applyAssetSpec(this.player, texture, PLAYER_SCALE);
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(5);
+    this.snapToSurface();
+    this.player.setVelocityX(DOWNHILL_PUSH);
+    // Spawning grounded means the first update() would otherwise treat it as a
+    // landing and award a phantom landing + combo.
+    this.wasGrounded = true;
     this.lastScoredX = this.player.x;
   }
 
@@ -179,20 +182,37 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createHud(): void {
+    this.add
+      .nineslice(
+        8,
+        6,
+        ASSET_KEYS.uiPanelDark,
+        undefined,
+        HUD_PANEL_WIDTH,
+        HUD_PANEL_HEIGHT,
+        18,
+        18,
+        18,
+        18,
+      )
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(9);
+
     this.scoreText = this.add
-      .text(8, 6, '', {
-        fontFamily: 'monospace',
-        fontSize: '18px',
+      .text(18, 14, '', {
+        fontFamily: FONT_FAMILIES.future,
+        fontSize: `${HUD_TEXT_SIZE}px`,
         color: '#f1f5f9',
       })
       .setScrollFactor(0)
       .setDepth(10);
 
     this.fpsText = this.add
-      .text(8, 32, '', {
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        color: '#94a3b8',
+      .text(18, 34, '', {
+        fontFamily: FONT_FAMILIES.pixel,
+        fontSize: `${HUD_MUTED_TEXT_SIZE}px`,
+        color: '#cbd5e1',
       })
       .setScrollFactor(0)
       .setDepth(10);
@@ -216,7 +236,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.updatePlayer(time, delta);
+    this.updatePlayer(delta);
+    this.applyPlayerFrame();
 
     this.scoreText.setText(
       `SCORE ${this.scoreSystem.total}  |  Coins ${this.scoreSystem.collectedCoins}  |  Combo x${this.scoreSystem.comboMultiplier.toFixed(1)}`,
@@ -233,7 +254,7 @@ export class GameScene extends Phaser.Scene {
       });
     }
     this.fpsText.setText(
-      `FPS ${Math.round(this.game.loop.actualFps)}  |  State: ${this.playerState}  |  Flips: ${this.flips}  |  Mount: ${this.mount?.kind ?? 'NONE'}  |  Diff: ${Math.round(this.difficulty.progressAt(this.player.x) * 100)}%  |  Chunks: ${this.chunks.size}`,
+      `FPS ${Math.round(this.game.loop.actualFps)}  |  State: ${this.playerState}  |  Mount: ${this.mount?.kind ?? 'NONE'}  |  Diff: ${Math.round(this.difficulty.progressAt(this.player.x) * 100)}%  |  Chunks: ${this.chunks.size}`,
     );
   }
 
@@ -243,12 +264,12 @@ export class GameScene extends Phaser.Scene {
     const minIndex = Math.max(0, Math.floor(camLeft / CHUNK_WIDTH) - CHUNK_KEEP_BEHIND);
     const maxIndex = Math.floor(camRight / CHUNK_WIDTH) + CHUNK_LOOK_AHEAD;
 
-    this.chunks.forEach((graphics, index) => {
+    this.chunks.forEach((chunk, index) => {
       if (index < minIndex || index > maxIndex) {
         this.chunks.delete(index);
-        graphics.setActive(false).setVisible(false);
-        graphics.clear();
-        this.chunkPool.push(graphics);
+        this.terrain.hideCrust(chunk);
+        chunk.fill.setActive(false).setVisible(false).clear();
+        this.chunkPool.push(chunk);
       }
     });
 
@@ -259,43 +280,55 @@ export class GameScene extends Phaser.Scene {
 
       const startX = index * CHUNK_WIDTH;
       const endX = startX + CHUNK_WIDTH;
-      let graphics = this.chunkPool.pop();
-      if (graphics) {
-        this.terrain.redrawChunk(graphics, startX, endX);
+      let chunk = this.chunkPool.pop();
+      if (chunk) {
+        this.terrain.redrawChunk(chunk, startX, endX);
       } else {
-        graphics = this.terrain.drawChunk(this, startX, endX);
+        chunk = this.terrain.drawChunk(this, startX, endX);
       }
-      graphics.setActive(true).setVisible(true);
-      this.chunks.set(index, graphics);
+      chunk.fill.setActive(true).setVisible(true);
+      this.chunks.set(index, chunk);
     }
   }
 
-  private updatePlayer(time: number, delta: number): void {
-    const player = this.player;
-
-    if (this.playerState === PlayerState.CRASHED) {
-      if (time >= this.crashedUntil) {
-        this.recoverFromCrash();
-      } else {
-        this.updateCrashedPlayer();
-        return;
-      }
+  /**
+   * Swaps the Kenney frame to match the current state. Every frame shares one
+   * canvas and one body, so the switch is purely cosmetic. There is no walk
+   * cycle: the ride frame is a static crouch.
+   */
+  private applyPlayerFrame(): void {
+    const frame = STATE_FRAME[this.playerState];
+    if (this.player.texture.key === frame) {
+      return;
     }
+    this.player.setTexture(frame);
+    applyAssetSpec(this.player, frame, PLAYER_SCALE);
+  }
 
+  private updatePlayer(delta: number): void {
+    const player = this.player;
     const grounded = this.isPlayerGrounded();
     const dir = this.controls.left ? -1 : this.controls.right ? 1 : 0;
     const speedScale = this.mount?.speed ?? 1;
 
     this.trackScore(delta, grounded);
+    this.updateMount();
+
+    const groundSpeed = dir * PLAYER_MOVE_VELOCITY * speedScale;
+    const downhill = DOWNHILL_PUSH * this.difficulty.speedScaleAt(player.x) * speedScale;
+
+    // Forward-only: the world begins at x = 0, so a net-left velocity would pin
+    // the player against the wall and read as running in place.
+    const steerSpeed = Math.max(groundSpeed + downhill, MIN_FORWARD_SPEED);
 
     if (grounded) {
-      const downhill = DOWNHILL_PUSH * this.difficulty.speedScaleAt(player.x) * speedScale;
-      player.setVelocityX(dir * PLAYER_MOVE_VELOCITY * speedScale + downhill);
+      player.setVelocityX(steerSpeed);
       this.snapToSurface();
-      player.setFlipX(dir < 0);
       this.jumpsUsed = 0;
-    } else {
-      player.setVelocityX(dir * AIR_HORIZONTAL_SPEED * speedScale);
+    } else if (dir !== 0) {
+      // Keep the launch momentum and steer toward the grounded velocity for that
+      // direction, instead of snapping to a fixed air speed, which stalled jumps.
+      player.setVelocityX(Phaser.Math.Linear(player.body.velocity.x, steerSpeed, 0.05));
     }
 
     this.effects.update(grounded, player.body.velocity.x);
@@ -308,7 +341,6 @@ export class GameScene extends Phaser.Scene {
         player.setVelocityY(this.currentJumpPower);
         this.effects.burstJump(player.x, player.body.bottom);
         this.audio.playJump();
-        this.beginJump();
       } else if (this.jumpsUsed < maxJumps) {
         this.jumpsUsed += 1;
         player.setVelocityY(this.currentJumpPower);
@@ -317,24 +349,9 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    if (!grounded) {
-      const spinDir = this.controls.right ? 1 : this.controls.left ? -1 : 0;
-      player.rotation += spinDir * SPIN_SPEED * (delta / 1000);
-      this.trackFlips();
-    }
-
     const wasGrounded = this.wasGrounded;
     this.wasGrounded = grounded;
-    this.updatePlayerState(time, grounded, wasGrounded);
-
-    if (this.playerState === PlayerState.CRASHED) {
-      return;
-    }
-
-    if (grounded) {
-      const target = this.terrain.slopeAngleAt(player.x);
-      player.rotation = Phaser.Math.Linear(player.rotation, target, 0.25);
-    }
+    this.updatePlayerState(grounded, wasGrounded);
   }
 
   private trackScore(delta: number, grounded: boolean): void {
@@ -348,119 +365,58 @@ export class GameScene extends Phaser.Scene {
 
   private isPlayerGrounded(): boolean {
     const body = this.player.body;
-    const surfaceY = this.terrain.surfaceYAt(this.player.x);
-    return body.velocity.y >= 0 && body.bottom >= surfaceY - SURFACE_TOLERANCE;
+    if (body.velocity.y < 0) {
+      return false;
+    }
+    // A fast downhill drops the surface ~2.7px per frame while gravity only
+    // moves the body ~0.08px, so a fixed 2px window un-grounded the player on
+    // every steep section and collapsed its speed. Widen the window with speed.
+    const slack = SURFACE_TOLERANCE + Math.abs(body.velocity.x) * 0.02;
+    return body.bottom >= this.terrain.surfaceYAt(this.player.x) - slack;
   }
 
   private snapToSurface(): void {
     const body = this.player.body;
-    const surfaceY = this.terrain.surfaceYAt(this.player.x);
-    body.y = surfaceY - body.halfHeight;
+    // body.y is the body's TOP edge, so subtracting the full height puts the
+    // feet on the snow. Using halfHeight buried the body half a box deep, which
+    // also put its top edge above the coin pickup band.
+    body.y = this.terrain.surfaceYAt(this.player.x) - body.height;
     body.setVelocityY(0);
   }
 
-  private beginJump(): void {
-    this.airRotationDelta = 0;
-    this.prevAirRotation = this.player.rotation;
-    this.flips = 0;
-  }
-
-  private trackFlips(): void {
-    this.airRotationDelta += this.player.rotation - this.prevAirRotation;
-    this.prevAirRotation = this.player.rotation;
-    this.flips = Math.floor(Math.abs(this.airRotationDelta) / TAU);
-  }
-
-  private updatePlayerState(time: number, grounded: boolean, wasGrounded: boolean): void {
+  private updatePlayerState(grounded: boolean, wasGrounded: boolean): void {
     if (!grounded) {
       this.playerState = PlayerState.AIRBORNE;
       return;
     }
 
-    if (!wasGrounded && this.handleLanding(time)) {
-      return;
+    if (!wasGrounded) {
+      this.handleLanding();
     }
 
-    if (time < this.landingLockTime) {
-      this.playerState = PlayerState.LANDING;
-      return;
-    }
-
-    this.playerState = this.player.body.velocity.x === 0 ? PlayerState.IDLE : PlayerState.SKIING;
+    this.playerState = PlayerState.SKIING;
   }
 
-  private handleLanding(time: number): boolean {
-    const deviation = Math.abs(
-      Phaser.Math.Angle.Wrap(this.player.rotation - this.terrain.slopeAngleAt(this.player.x)),
-    );
-
-    if (deviation > this.currentLandingTolerance) {
-      if (this.mount) {
-        this.dismountAnimal();
-        this.scoreSystem.breakCombo();
-        this.airTimeSeconds = 0;
-        this.airRotationDelta = 0;
-        this.landingLockTime = time + LANDING_LOCK_MS;
-        return false;
-      }
-      this.triggerCrash(time);
-      return true;
-    }
-
-    this.flips = Math.floor(Math.abs(this.airRotationDelta) / TAU);
-    this.scoreSystem.registerLanding({
-      flips: this.flips,
-      airTimeSeconds: this.airTimeSeconds,
-    });
+  /**
+   * Every touchdown counts. Without sprite rotation there is no landing angle to
+   * judge, so the only ways to lose are obstacles and rocks.
+   */
+  private handleLanding(): void {
+    this.scoreSystem.registerLanding({ airTimeSeconds: this.airTimeSeconds });
     this.effects.burstLanding(this.player.x, this.player.body.bottom);
     this.audio.playLanding();
-    if (this.flips > 0) {
-      this.audio.playCombo();
-    }
     this.airTimeSeconds = 0;
-    this.airRotationDelta = 0;
-    this.landingLockTime = time + LANDING_LOCK_MS;
-    return false;
+  }
+
+  /** The wolf bolts after carrying the player for a while. */
+  private updateMount(): void {
+    if (this.mount && this.player.x - this.mountX >= WOLF_RIDE_DISTANCE) {
+      this.dismountAnimal();
+    }
   }
 
   private get currentJumpPower(): number {
     return this.mount?.jumpPower ?? PLAYER_JUMP_VELOCITY;
-  }
-
-  private get currentLandingTolerance(): number {
-    return LANDING_ALIGN_TOLERANCE * (this.mount?.stability ?? 1);
-  }
-
-  private triggerCrash(time: number): void {
-    this.playerState = PlayerState.CRASHED;
-    this.crashedUntil = time + CRASH_COOLDOWN_MS;
-    this.flips = 0;
-    this.airRotationDelta = 0;
-    this.airTimeSeconds = 0;
-    this.scoreSystem.breakCombo();
-    this.player.setTint(CRASH_TINT);
-    this.player.setVelocityX(0);
-    this.effects.stopTrail();
-    this.effects.burstCrash(this.player.x, this.player.y);
-    this.audio.setSkiing(false);
-    this.audio.playCrash();
-    this.emitEvent('PLAYER_CRASHED', { cause: 'bad-landing' });
-    this.cameras.main.shake(160, 0.006);
-  }
-
-  private updateCrashedPlayer(): void {
-    if (!this.isPlayerGrounded()) {
-      return;
-    }
-    this.snapToSurface();
-    this.player.setVelocityX(0);
-  }
-
-  private recoverFromCrash(): void {
-    this.player.clearTint();
-    this.snapToSurface();
-    this.player.rotation = this.terrain.slopeAngleAt(this.player.x);
-    this.playerState = PlayerState.SKIING;
   }
 
   private wireCollisions(): void {
@@ -489,12 +445,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private mountAnimal(sprite: Phaser.Physics.Arcade.Sprite): void {
-    if (this.runEnded || this.playerState === PlayerState.CRASHED || this.mount) {
+    if (this.runEnded || this.mount) {
       return;
     }
     const kind = sprite.getData('animalKind') as AnimalKind;
     const config = ANIMAL_CONFIGS[kind];
     this.mount = config;
+    this.mountX = this.player.x;
     this.jumpsUsed = 0;
     this.player.setTint(config.tint);
     this.animalSystem.consume(sprite);
@@ -508,14 +465,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private hitObstacle(): void {
-    if (this.runEnded || this.playerState === PlayerState.CRASHED) {
+    if (this.runEnded) {
       return;
     }
     this.endRun('You crashed into an obstacle!');
   }
 
   private launchFromRamp(): void {
-    if (this.runEnded || this.playerState === PlayerState.CRASHED) {
+    if (this.runEnded) {
       return;
     }
     if (!this.isPlayerGrounded()) {
@@ -523,7 +480,6 @@ export class GameScene extends Phaser.Scene {
     }
     this.player.setVelocityY(PLAYER_RAMP_LAUNCH_VELOCITY);
     this.jumpsUsed = 1;
-    this.beginJump();
   }
 
   private endRun(reason: string): void {
@@ -531,6 +487,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.runEnded = true;
+    this.player.setTexture(ASSET_KEYS.skierCrash);
+    applyAssetSpec(this.player, ASSET_KEYS.skierCrash, PLAYER_SCALE);
     this.player.setTint(CRASH_TINT);
     this.player.setVelocity(0, 0);
     this.player.body.setAllowGravity(false);
@@ -546,21 +504,40 @@ export class GameScene extends Phaser.Scene {
     const w = this.scale.width;
     const h = this.scale.height;
     this.add.rectangle(0, 0, w, h, 0x0b1220, 0.72).setOrigin(0).setScrollFactor(0).setDepth(20);
+
+    this.add
+      .image(w / 2, h / 2 - 118, ASSET_KEYS.uiBanner)
+      .setOrigin(0.5)
+      .setScale(1.7)
+      .setScrollFactor(0)
+      .setDepth(21);
+
+    this.add
+      .text(w / 2, h / 2 - 118, 'GAME OVER', {
+        fontFamily: FONT_FAMILIES.future,
+        fontSize: '26px',
+        color: '#0f172a',
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(22);
+
     this.add
       .text(
         w / 2,
-        h / 2,
-        `GAME OVER\n\nScore: ${this.scoreSystem.total}\n${reason}\n\nPress R to ski again`,
+        h / 2 + 16,
+        `Score: ${this.scoreSystem.total}\nCoins: ${this.scoreSystem.collectedCoins}\n\n${reason}\n\nPress R to ski again`,
         {
-          fontFamily: 'monospace',
-          fontSize: '22px',
+          fontFamily: FONT_FAMILIES.future,
+          fontSize: `${OVERLAY_TEXT_SIZE}px`,
           color: '#f8fafc',
           align: 'center',
+          lineSpacing: 6,
         },
       )
       .setOrigin(0.5)
       .setScrollFactor(0)
-      .setDepth(21);
+      .setDepth(22);
   }
 
   private handleGameOverInput(): void {

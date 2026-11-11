@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { AUDIO_KEYS } from '../audio-keys';
+import { AUDIO_KEYS } from '../entities/audio-keys';
 import { AUDIO_VOLUME_AMBIENT, AUDIO_VOLUME_SFX, AUDIO_VOLUME_SKI } from '../game-tunbles';
 
 export class AudioSystem {

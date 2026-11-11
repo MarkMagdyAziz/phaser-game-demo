@@ -1,9 +1,11 @@
 import * as Phaser from 'phaser';
-import { ASSET_KEYS } from '../asset-keys';
+import { ASSET_KEYS } from '../entities/asset-keys';
+import { applyAssetSpec } from '../asset-specs';
 import {
   COIN_DENSITY,
   COIN_KEEP_BEHIND_SLOTS,
   COIN_LOOK_AHEAD_SLOTS,
+  COIN_SCALE,
   COIN_SLOT_WIDTH,
   COIN_SURFACE_OFFSET,
 } from '../game-tunbles';
@@ -64,9 +66,9 @@ export class CoinSystem {
     const y = this.terrain.surfaceYAt(x) - COIN_SURFACE_OFFSET;
     const sprite = this.group.get(x, y, ASSET_KEYS.coin) as Phaser.Physics.Arcade.Sprite;
 
-    sprite.setPosition(x, y);
+    sprite.setOrigin(0.5, 0.5).setPosition(x, y);
     sprite.enableBody(false, x, y, true, true);
-    sprite.refreshBody();
+    applyAssetSpec(sprite, ASSET_KEYS.coin, COIN_SCALE);
     sprite.setData('coinSlot', slot);
 
     this.active.set(slot, sprite);

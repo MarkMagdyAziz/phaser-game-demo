@@ -42,3 +42,8 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Raw Kenney pack extracts (~25 MB of mostly-unused art). The curated set that
+# the game actually loads lives in public/assets/game-3 and IS committed; see
+# ASSETS.md for provenance and re-extraction instructions.
+/art-source/kenney/

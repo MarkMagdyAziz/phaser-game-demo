@@ -1,3 +1,35 @@
 /* You can add global styles to this file, and also import other style files */
 
 @import 'tailwindcss';
+
+/*
+ * Kenney fonts (CC0), copied into public/assets/game-3/fonts by
+ * art-source/tools/curate-game3-assets.ps1. game-3 registers the families with
+ * Phaser Text via FONT_FAMILIES in src/app/game-3/entities/asset-keys.ts, and
+ * PreloadScene awaits document.fonts.load() so labels never paint in a fallback
+ * face. See ASSETS.md at the repo root for attribution.
+ */
+
+@font-face {
+  font-family: 'Kenney Future';
+  src: url('/assets/game-3/fonts/Kenney Future.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Kenney Blocks';
+  src: url('/assets/game-3/fonts/Kenney Blocks.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Kenney Pixel';
+  src: url('/assets/game-3/fonts/Kenney Pixel.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}

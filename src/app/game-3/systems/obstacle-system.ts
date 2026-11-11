@@ -1,9 +1,11 @@
 import * as Phaser from 'phaser';
-import { ASSET_KEYS } from '../asset-keys';
+import { ASSET_KEYS } from '../entities/asset-keys';
+import { applyAssetSpec } from '../asset-specs';
 import {
   OBSTACLE_DENSITY,
   OBSTACLE_KEEP_BEHIND_SLOTS,
   OBSTACLE_LOOK_AHEAD_SLOTS,
+  OBSTACLE_SCALE,
   OBSTACLE_SLOT_WIDTH,
 } from '../game-tunbles';
 import { TerrainGenerator } from './terrain-generator';
@@ -15,11 +17,17 @@ export enum ObstacleKind {
   RAMP = 'RAMP',
 }
 
-const OBSTACLE_TEXTURE: Record<ObstacleKind, string> = {
-  [ObstacleKind.TREE]: ASSET_KEYS.tree,
-  [ObstacleKind.ROCK]: ASSET_KEYS.rock,
-  [ObstacleKind.SNOW_PILE]: ASSET_KEYS.snowPile,
-  [ObstacleKind.RAMP]: ASSET_KEYS.ramp,
+/**
+ * Candidate textures per kind. Several variants per kind are picked by slot
+ * hash so long stretches do not repeat, and each variant carries its own body
+ * in asset-specs.ts (the two trees differ from the rocks by an order of
+ * magnitude), so the body always matches the art actually used.
+ */
+const OBSTACLE_TEXTURES: Record<ObstacleKind, readonly string[]> = {
+  [ObstacleKind.TREE]: [ASSET_KEYS.treeSnow, ASSET_KEYS.treeBare],
+  [ObstacleKind.ROCK]: [ASSET_KEYS.rock],
+  [ObstacleKind.SNOW_PILE]: [ASSET_KEYS.snowDrift, ASSET_KEYS.snowBush],
+  [ObstacleKind.RAMP]: [ASSET_KEYS.ramp],
 };
 
 export class ObstacleSystem {
@@ -94,22 +102,28 @@ export class ObstacleSystem {
   private activateSlot(slot: number, kind: ObstacleKind): void {
     const x = slot * OBSTACLE_SLOT_WIDTH + (this.hash(slot) % 100);
     const y = this.terrain.surfaceYAt(x);
-    const sprite = this.groups[kind].get(
-      x,
-      y,
-      OBSTACLE_TEXTURE[kind],
-    ) as Phaser.Physics.Arcade.Sprite;
+    const texture = this.textureForSlot(slot, kind);
+    const sprite = this.groups[kind].get(x, y, texture) as Phaser.Physics.Arcade.Sprite;
 
+    // Obstacles stand on the snow line, so anchor to the bottom edge.
     sprite.setOrigin(0.5, 1).setPosition(x, y);
     sprite.enableBody(false, x, y, true, true);
+    applyAssetSpec(sprite, texture, OBSTACLE_SCALE);
 
+    // Ramps are launched by an overlap, not a collision, and the ramp group is
+    // not in solidGroups, so no checkCollision flag is needed. Setting
+    // checkCollision.none would stop Phaser's overlap from ever firing
+    // (World.separate() bails out on it).
     const body = sprite.body as Phaser.Physics.Arcade.StaticBody;
     if (kind === ObstacleKind.RAMP) {
       body.checkCollision.none = true;
     }
-    sprite.refreshBody();
-
     this.active.set(slot, sprite);
+  }
+
+  private textureForSlot(slot: number, kind: ObstacleKind): string {
+    const candidates = OBSTACLE_TEXTURES[kind];
+    return candidates[this.hash(slot >>> 3) % candidates.length];
   }
 
   private deactivateSlot(slot: number, sprite: Phaser.Physics.Arcade.Sprite): void {

@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { ASSET_KEYS } from '../asset-keys';
+import { ASSET_KEYS } from '../entities/asset-keys';
 import {
   EFFECT_COIN_PARTICLES,
   EFFECT_CRASH_PARTICLES,
@@ -11,6 +11,12 @@ import {
 
 type Emitter = Phaser.GameObjects.Particles.ParticleEmitter;
 
+/**
+ * Particle emitters over the curated Kenney particle art. The source PNGs are
+ * alpha-trimmed and pre-scaled by the curation script (snow 24px, star 32px,
+ * smoke 48px), so the `scale` values below are relative to those real sizes
+ * rather than to the old 6px generated circle.
+ */
 export class EffectsSystem {
   private readonly snow: Emitter;
   private readonly trail: Emitter;
@@ -22,13 +28,13 @@ export class EffectsSystem {
   constructor(scene: Phaser.Scene) {
     const { width } = scene.scale;
 
-    this.snow = scene.add.particles(0, 0, ASSET_KEYS.particle, {
+    this.snow = scene.add.particles(0, 0, ASSET_KEYS.particleSnow, {
       x: { min: 0, max: width },
       y: -8,
       lifespan: { min: 4000, max: 7000 },
       speedY: { min: 30, max: 80 },
       speedX: { min: -15, max: 15 },
-      scale: { start: 0.5, end: 0.15 },
+      scale: { start: 0.5, end: 0.2 },
       alpha: { start: 0.9, end: 0.2 },
       frequency: EFFECT_SNOWFALL_FREQUENCY,
       quantity: 1,
@@ -37,13 +43,13 @@ export class EffectsSystem {
     });
     this.snow.setScrollFactor(0).setDepth(8);
 
-    this.trail = scene.add.particles(0, 0, ASSET_KEYS.particle, {
+    this.trail = scene.add.particles(0, 0, ASSET_KEYS.particleSnow, {
       x: 0,
       y: 0,
       lifespan: 350,
       speedX: { min: -20, max: 20 },
       speedY: { min: -30, max: -5 },
-      scale: { start: 0.7, end: 0 },
+      scale: { start: 0.42, end: 0 },
       alpha: { start: 0.8, end: 0 },
       frequency: EFFECT_TRAIL_FREQUENCY,
       quantity: 1,
@@ -52,10 +58,50 @@ export class EffectsSystem {
     });
     this.trail.setDepth(4);
 
-    this.landingBurst = this.createBurst(scene, 0xffffff, { min: 40, max: 130 }, 500, 260);
-    this.jumpBurst = this.createBurst(scene, 0xffffff, { min: 30, max: 90 }, 400, 180);
-    this.crashBurst = this.createBurst(scene, 0xef4444, { min: 60, max: 220 }, 600, 340);
-    this.coinBurst = this.createBurst(scene, 0xfacc15, { min: 50, max: 160 }, 450, 0);
+    this.landingBurst = this.createBurst(
+      scene,
+      ASSET_KEYS.particleSnow,
+      0xffffff,
+      {
+        min: 40,
+        max: 130,
+      },
+      500,
+      260,
+    );
+    this.jumpBurst = this.createBurst(
+      scene,
+      ASSET_KEYS.particleSnow,
+      0xffffff,
+      {
+        min: 30,
+        max: 90,
+      },
+      400,
+      180,
+    );
+    this.crashBurst = this.createBurst(
+      scene,
+      ASSET_KEYS.particleSmoke,
+      0xef4444,
+      {
+        min: 60,
+        max: 220,
+      },
+      600,
+      340,
+    );
+    this.coinBurst = this.createBurst(
+      scene,
+      ASSET_KEYS.particleStar,
+      0xfacc15,
+      {
+        min: 50,
+        max: 160,
+      },
+      450,
+      0,
+    );
   }
 
   follow(target: Phaser.Types.Math.Vector2Like): void {
@@ -88,12 +134,13 @@ export class EffectsSystem {
 
   private createBurst(
     scene: Phaser.Scene,
+    texture: string,
     tint: number,
     speed: { min: number; max: number },
     lifespan: number,
     gravityY: number,
   ): Emitter {
-    const emitter = scene.add.particles(0, 0, ASSET_KEYS.particle, {
+    const emitter = scene.add.particles(0, 0, texture, {
       x: 0,
       y: 0,
       lifespan,

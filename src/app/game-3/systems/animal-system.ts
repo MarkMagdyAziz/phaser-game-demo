@@ -1,10 +1,12 @@
 import * as Phaser from 'phaser';
 import { AnimalKind, ANIMAL_CONFIGS } from '../entities/animal';
+import { scaleBody } from '../body-geometry';
 import {
   ANIMAL_DENSITY,
   ANIMAL_KEEP_BEHIND_SLOTS,
   ANIMAL_LOOK_AHEAD_SLOTS,
   ANIMAL_SLOT_WIDTH,
+  WOLF_SCALE,
 } from '../game-tunbles';
 import { TerrainGenerator } from './terrain-generator';
 
@@ -71,7 +73,14 @@ export class AnimalSystem {
 
     sprite.setOrigin(0.5, 1).setPosition(x, y);
     sprite.enableBody(false, x, y, true, true);
+    // The wolf is painted at boot, so it has no entry in TEXTURE_ASSETS; apply
+    // its torso box by hand, mirroring applyAssetSpec's static-body ordering.
+    const world = scaleBody(config.body, WOLF_SCALE);
+    sprite.setScale(WOLF_SCALE);
+    sprite.body?.setOffset(0, 0);
     sprite.refreshBody();
+    sprite.body?.setSize(world.width, world.height, false);
+    sprite.body?.setOffset(world.offsetX, world.offsetY);
     sprite.setData('animalSlot', slot);
     sprite.setData('animalKind', kind);
 

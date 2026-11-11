@@ -4,35 +4,46 @@
 
 > Decisions agreed with the developer during implementation. They override earlier wording in this document where they conflict.
 
-| #   | Decision                                                                                                                                                                                                                                                                 |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| D1  | **Phaser 4, not Phaser 3.** The repo installs `phaser@^4.2.1` and the reference shell (game-2) runs Phaser 4. Only one `phaser` package can be installed, so "preserve Phaser 3" (old Agent Rule 1 / tech constraints) is treated as stale text.                         |
-| D2  | **Fresh folder.** game-3 lives in `src/app/game-3/`, mirroring game-2's shell: `component` → `service` (dynamic `import('phaser')`, SSR + double-init guards) → `game.config.ts` → `game-tunbles.ts` → `scenes/`.                                                        |
-| D3  | **Ported prototype.** The `BootScene` / `MainScene` prototype described in §3 comes from `src/app/game/` (game-1) and is ported, never edited in place.                                                                                                                  |
-| D4  | **No ESLint.** Only Prettier is installed. Verification loop = `npx tsc --noEmit -p tsconfig.app.json` → `npx prettier --check` → `npm run build`.                                                                                                                       |
-| D5  | **SSR safety.** `/game-3` is registered as `RenderMode.Client` in `app.routes.server.ts` (same as `game`, `game-2`) so Phaser is never evaluated during prerender. Build reproduced the `window is not defined` failure before this was added.                           |
-| D6  | **Placeholder art first.** Temporary textures are generated at runtime in `BootScene` via `graphics.generateTexture()` — no external assets / licensing burden until later milestones introduce real CC0 art (then `ASSETS.md`).                                         |
-| D7  | **Contour terrain model.** Arcade physics has no rotated static bodies, so the downhill slope uses a surface contour `surfaceYAt(x)` + gravity + ground-snap (an "original simplified physics model" per Phase 5); Arcade handles the player body and hazard collisions. |
-| D8  | **In-scene game-over overlay** (game-2 `showDialog` pattern); a dedicated `GameOverScene` is deferred until needed.                                                                                                                                                      |
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D1  | **Phaser 4, not Phaser 3.** The repo installs `phaser@^4.2.1` and the reference shell (game-2) runs Phaser 4. Only one `phaser` package can be installed, so "preserve Phaser 3" (old Agent Rule 1 / tech constraints) is treated as stale text.                                                                                                                                                                                                                                                                               |
+| D2  | **Fresh folder.** game-3 lives in `src/app/game-3/`, mirroring game-2's shell: `component` → `service` (dynamic `import('phaser')`, SSR + double-init guards) → `game.config.ts` → `game-tunbles.ts` → `scenes/`.                                                                                                                                                                                                                                                                                                              |
+| D3  | **Ported prototype.** The `BootScene` / `MainScene` prototype described in §3 comes from `src/app/game/` (game-1) and is ported, never edited in place.                                                                                                                                                                                                                                                                                                                                                                        |
+| D4  | **No ESLint.** Only Prettier is installed. Verification loop = `npx tsc --noEmit -p tsconfig.app.json` → `npx prettier --check` → `npm run build`.                                                                                                                                                                                                                                                                                                                                                                             |
+| D5  | **SSR safety.** `/game-3` is registered as `RenderMode.Client` in `app.routes.server.ts` (same as `game`, `game-2`) so Phaser is never evaluated during prerender. Build reproduced the `window is not defined` failure before this was added.                                                                                                                                                                                                                                                                                 |
+| D6  | **Placeholder art first.** Temporary textures are generated at runtime in `BootScene` via `graphics.generateTexture()` — no external assets / licensing burden until later milestones introduce real CC0 art (then `ASSETS.md`).                                                                                                                                                                                                                                                                                               |
+| D7  | **Contour terrain model.** Arcade physics has no rotated static bodies, so the downhill slope uses a surface contour `surfaceYAt(x)` + gravity + ground-snap (an "original simplified physics model" per Phase 5); Arcade handles the player body and hazard collisions.                                                                                                                                                                                                                                                       |
+| D8  | **In-scene game-over overlay** (game-2 `showDialog` pattern); a dedicated `GameOverScene` is deferred until needed.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| D9  | **Kenney CC0 art direction.** Real art replaces the D6 placeholders. New Platformer Pack for player/terrain/coins/backgrounds, Foliage Pack for the two tree silhouettes, Particle Pack for effects, UI Pack for chrome, Font Pack for type. Autumn-orange canopies and 900 unnamed `Tiles/tile_*.png` were rejected. All CC0, so licensing risk is limited to attribution, which is recorded in `ASSETS.md`.                                                                                                                  |
+| D10 | **The wolf is original art.** No pack ships a rideable wolf, so it is drawn at boot with the Graphics API into a `WOLF_TEXTURE_WIDTH`x`WOLF_TEXTURE_HEIGHT` texture. Nothing is committed and no third-party rights are involved. `BOOT_DRAWN_KEYS` marks it so the loader never tries to fetch it.                                                                                                                                                                                                                            |
+| D11 | **Smooth rendering, not pixel art.** `render` moves from `{ antialias: false, pixelArt: true, roundPixels: true }` to `{ antialias: true, pixelArt: false, roundPixels: false }`. Kenney's New Platformer art is clean vector-style work; nearest-neighbour sampling and texture filtering both degrade it. `roundPixels` goes with `pixelArt` so rotated sprites do not jitter.                                                                                                                                               |
+| D12 | **Curate, then delete the rest.** Raw extracts were ~4,500 files / 25 MB, of which ~30 are used. Shipped art is trimmed/padded/downscaled by `art-source/tools/curate-game3-assets.ps1`; the raw dumps are git-ignored and every shipped file must have exactly one consumer. A `terrain` fill tile, a spark particle, and the light UI panel were generated and then deleted for having no consumer.                                                                                                                          |
+| D13 | **Snow crust over a solid fill.** Kenney's terrain tiles do not tile vertically along a procedural contour, so the packed-snow body stays a `Graphics` polygon (`SURFACE_COLOR`) and Kenney's crust band is stamped along the surface at `TERRAIN_CRUST_STEP` spacing with left/right caps per chunk. Falls back to the D7 contour model if seams appear, since the fill alone still looks correct.                                                                                                                            |
+| D14 | **Rotation removed.** The sprite never rotates: no air spin, no slope-alignment lerp. Rotation was secretly load-bearing — `handleLanding` used the sprite angle to decide crash-vs-clean, so freezing it would have crashed every sloped landing. Rather than keep an invisible version of the mechanic, the whole trick subsystem went: flips, `FLIP_POINTS`, `SPIN_SPEED`, the landing-alignment tolerance and the recoverable `CRASHED` state. Obstacle contact is now the only way to lose.                               |
+| D15 | **Static crouch pose.** The Kenney `climb_a/climb_b` frames are a walk cycle; alternating them at 110 ms made the character march in place. `SKIING` now holds a single crouch frame, and the never-visible front frame was dropped. Player art is 3 PNGs: ride, air, crash.                                                                                                                                                                                                                                                   |
+| D16 | **Arcade bodies are applied after `refreshBody()`.** `StaticBody.updateFromGameObject()` overwrites width/height from `displayWidth/Height`, so the old `setSize → setOffset → refreshBody` order silently discarded every custom body (tree trunks, wolf torso). `applyAssetSpec` now refreshes first; and because `StaticBody.setSize` takes world pixels while `AssetBody` is authored in texture pixels, static bodies scale their values and normalise `offset` so a pooled sprite lands identically on every activation. |
+| D17 | **Smooth ice-like ground.** The contour was softened (`AMP_LARGE` 90→50, `PERIOD_LARGE` 2400→3600, `AMP_SMALL` 34→6, `PERIOD_SMALL` 700→1800, `TERRAIN_BONUS` 0.6→0.25), taking the max slope from ~28° to ~6° (~8° at full difficulty). Separately, the crust tiles have a flat top edge, so stamping them along a curve produced a 20px staircase; each tile is now rotated to `slopeAngleAt(x)` around its top-centre origin, and the contour is stroked with a near-white `SURFACE_LINE_COLOR` for an icy edge.            |
 
 ### Step log
 
-| Step                                                                                                                                                                                                     | Status  |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| Step 1 — scaffold + `Boot → Preload → Game` chain, loaded player sprite, keyboard + FPS, route + home pill                                                                                               | ✅ done |
-| Step 2 — Arcade Physics player (Phase 2): gravity, velocity, jump, ground detection, landing, rotation, player FSM                                                                                       | ✅ done |
-| Step 3 — Snow terrain (Phase 3): `TerrainGenerator` contour, world bounds + camera follow, ground-snap, downhill push, slope-banked rotation                                                             | ✅ done |
-| Step 4 — Endless world (Phase 4): infinite procedural rollers, chunked stream + `chunkPool` reuse, endless physics/camera bounds                                                                         | ✅ done |
-| Step 5 — Skiing mechanics (Phase 5): air control, spin + flip counting, landing alignment → `CRASHED` stun + recovery                                                                                    | ✅ done |
-| Step 6 — Obstacles (Phase 6): deterministic slot placement, per-kind static-group pooling, overlap crash → game-over overlay (D8), ramp launch                                                           | ✅ done |
-| Step 7 — Animals (Phase 7): `entities/animal.ts` config model + `AnimalSystem` streaming; mount applies speed/jump/stability + `doubleJump`; bad landing dismounts                                       | ✅ done |
-| Step 8 — Score + combo (Phase 8): `ScoreSystem` + `ComboSystem` (distance/coins/air time/flips/landings × multiplier), `CoinSystem` pickups, score HUD + final score                                     | ✅ done |
-| Step 9 — Difficulty scaling (Phase 9): `DifficultySystem` distance-driven progress scaling terrain complexity, obstacle/animal density, downhill speed (capped, x-deterministic)                         | ✅ done |
-| Step 10 — Camera + background (Phase 10): `BackgroundSystem` parallax `TileSprite` layers (sky/clouds/far+mid mountains/foreground snow), physics-independent                                            | ✅ done |
-| Step 11 — Particles/effects (Phase 11): `EffectsSystem` pooled emitters — snowfall, trail, landing/jump/crash/coin bursts (pooled, no per-frame creation)                                                | ✅ done |
-| Step 12 — Audio (Phase 12): `AudioSystem` + `audio-keys.ts`; ambient wind bed, skiing loop, jump/land/crash/coin/combo/UI one-shots; assets in `public/sounds` (trimmed)                                 | ✅ done |
-| Step 13 — Angular integration (Phase 13): `GameEventBus` on Phaser registry ↔ `Game3Component` signals; discrete game events (start/pause/over/score/crash/mount/restart), no per-frame change detection | ✅ done |
-| Step 14 — Mobile/responsive controls (Phase 14): `InputSystem` abstracts keyboard + touch buttons + swipe into `left`/`right`/`jump`/`restart` semantics (gamepad-ready)                                 | ✅ done |
+| Step                                                                                                                                                                                                                                                                                                                                                                     | Status  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
+| Step 1 — scaffold + `Boot → Preload → Game` chain, loaded player sprite, keyboard + FPS, route + home pill                                                                                                                                                                                                                                                               | ✅ done |
+| Step 2 — Arcade Physics player (Phase 2): gravity, velocity, jump, ground detection, landing, rotation, player FSM                                                                                                                                                                                                                                                       | ✅ done |
+| Step 3 — Snow terrain (Phase 3): `TerrainGenerator` contour, world bounds + camera follow, ground-snap, downhill push, slope-banked rotation                                                                                                                                                                                                                             | ✅ done |
+| Step 4 — Endless world (Phase 4): infinite procedural rollers, chunked stream + `chunkPool` reuse, endless physics/camera bounds                                                                                                                                                                                                                                         | ✅ done |
+| Step 5 — Skiing mechanics (Phase 5): air control, spin + flip counting, landing alignment → `CRASHED` stun + recovery                                                                                                                                                                                                                                                    | ✅ done |
+| Step 6 — Obstacles (Phase 6): deterministic slot placement, per-kind static-group pooling, overlap crash → game-over overlay (D8), ramp launch                                                                                                                                                                                                                           | ✅ done |
+| Step 7 — Animals (Phase 7): `entities/animal.ts` config model + `AnimalSystem` streaming; mount applies speed/jump/stability + `doubleJump`; bad landing dismounts                                                                                                                                                                                                       | ✅ done |
+| Step 8 — Score + combo (Phase 8): `ScoreSystem` + `ComboSystem` (distance/coins/air time/flips/landings × multiplier), `CoinSystem` pickups, score HUD + final score                                                                                                                                                                                                     | ✅ done |
+| Step 9 — Difficulty scaling (Phase 9): `DifficultySystem` distance-driven progress scaling terrain complexity, obstacle/animal density, downhill speed (capped, x-deterministic)                                                                                                                                                                                         | ✅ done |
+| Step 10 — Camera + background (Phase 10): `BackgroundSystem` parallax `TileSprite` layers (sky/clouds/far+mid mountains/foreground snow), physics-independent                                                                                                                                                                                                            | ✅ done |
+| Step 11 — Particles/effects (Phase 11): `EffectsSystem` pooled emitters — snowfall, trail, landing/jump/crash/coin bursts (pooled, no per-frame creation)                                                                                                                                                                                                                | ✅ done |
+| Step 12 — Audio (Phase 12): `AudioSystem` + `audio-keys.ts`; ambient wind bed, skiing loop, jump/land/crash/coin/combo/UI one-shots; assets in `public/sounds` (trimmed)                                                                                                                                                                                                 | ✅ done |
+| Step 13 — Angular integration (Phase 13): `GameEventBus` on Phaser registry ↔ `Game3Component` signals; discrete game events (start/pause/over/score/crash/mount/restart), no per-frame change detection                                                                                                                                                                 | ✅ done |
+| Step 14 — Mobile/responsive controls (Phase 14): `InputSystem` abstracts keyboard + touch buttons + swipe into `left`/`right`/`jump`/`restart` semantics (gamepad-ready)                                                                                                                                                                                                 | ✅ done |
+| Step 15 — Production art pass (D9–D13): curated 30 CC0 files into `public/assets/game-3`, original wolf drawn at boot, `@font-face` + `document.fonts` gate, nineslice HUD and game-over banner, Kenney touch buttons, smooth rendering, raw dumps git-ignored, `ASSETS.md` written                                                                                      | ✅ done |
+| Step 16 — Simplify movement (D14–D16): static crouch pose replaces the walk-cycle frames (3 player PNGs, 27 assets), sprite rotation and the whole flip/trick/bad-landing-crash subsystem removed, Arcade bodies now actually apply (static-body scale + offset fixed), coin pickup box widened, wolf expires after `WOLF_RIDE_DISTANCE`, 16 unused `.ogg` files deleted | ✅ done |
 
 ---
 
@@ -88,8 +99,9 @@ BootScene → PreloadScene → GameScene
 Currently:
 
 - Creates a temporary Graphics object.
-- Draws a green rounded rectangle and a white snow square.
-- Generates placeholder `player` / `snow` textures via `generateTexture`.
+- Draws the rideable wolf from layered ellipses and triangles (D10 — the only
+  texture `BootScene` still generates; it exists because no Kenney pack ships a wolf).
+- Generates the `animal-wolf` texture via `generateTexture`.
 - Destroys the temporary Graphics object.
 - Starts `PreloadScene`.
 
@@ -97,8 +109,11 @@ Currently:
 
 Currently:
 
-- A thin seam for future asset loading.
-- On loader `complete`, starts `GameScene`.
+- Draws a loading panel plus `LOADING` / percentage labels in the Kenney fonts.
+- Loads every entry in `asset-specs.ts` (`TEXTURE_ASSETS`) and the audio set.
+- Advances a progress bar on the loader `progress` event.
+- Awaits `document.fonts.load()` for each `FONT_FAMILIES` entry so Phaser `Text`
+  never paints in a fallback face, then starts `GameScene`.
 
 ### GameScene
 
@@ -108,14 +123,13 @@ Currently (Phase 14 — Mobile / Responsive Controls):
 - Terrain is streamed in **chunks** (`CHUNK_WIDTH` 800): chunks behind the camera are recycled into a `chunkPool`, chunks ahead are drawn/reused (`drawChunk` / `redrawChunk`) — no unbounded object growth.
 - Camera/physics world are effectively endless: width `ENDLESS_WIDTH` (20M px), height bounded to `WORLD_HEIGHT` 900; deadzone (140×90) + lerp follow.
 - Player is a dynamic Arcade body under gravity; vertical position is driven by the terrain, not free input.
-- Ground model (decision D7): when falling and crossing the contour → snap to the surface, zero vertical velocity; grounded when `velocity.y >= 0` and body bottom reaches the surface.
-- `DOWNHILL_PUSH` slides the player along the slope while grounded (momentum); left / right steering; UP / SPACE jump while grounded.
-- (Phase 5) **Air tricks:** while airborne, LEFT / RIGHT rotate the sprite (`SPIN_SPEED`), and air steering is gentler (`AIR_HORIZONTAL_SPEED`); full 360° spins accumulate a flip count (`trackFlips`, a jump resets it).
-- (Phase 5) **Landing quality:** on ground contact the sprite's rotation is compared to the local slope angle; within `LANDING_ALIGN_TOLERANCE` → successful landing (flip count kept, `LANDING` lock); beyond it → `CRASHED` (red tint + small camera shake + stun for `CRASH_COOLDOWN_MS`, then auto-recover to the slope).
+- Ground model (decision D7): when falling and crossing the contour → snap to the surface, zero vertical velocity; grounded when `velocity.y >= 0` and the body bottom reaches the surface. The tolerance widens with speed (`SURFACE_TOLERANCE + |vx| * 0.02`) because a fast downhill drops the contour ~2.7px per frame while gravity only moves the body ~0.08px.
+- `DOWNHILL_PUSH` slides the player along the slope while grounded (momentum); left / right steering; UP / SPACE jump while grounded. The player spawns on the surface already moving, so there is no drop-in. Steering is floored at `MIN_FORWARD_SPEED`: the world begins at x = 0 and only positive chunks are generated, so a net-left velocity would pin the player against the left wall and read as running in place.
+- (Phase 5, superseded by D14) **Air movement:** the player keeps its launch momentum while airborne; holding a direction lerps toward the ground-speed target rather than snapping to a fixed air speed. The sprite no longer rotates, so there is no spin, flip counting or landing-alignment check — landing always succeeds and obstacle contact is the only way to lose.
 - (Phase 6) **Obstacles:** `ObstacleSystem` (`systems/obstacle-system.ts`) places obstacles deterministically per `OBSTACLE_SLOT_WIDTH` slot (hash-based kind via `OBSTACLE_DENSITY`), streaming + recycling them through per-kind `StaticGroup` pools as the camera moves.
 - (Phase 6) Tree / rock / snow pile are solid hazards (overlap-only, decision: pass-through-and-die) that end the run; ramps are sensors that launch the player (`PLAYER_RAMP_LAUNCH_VELOCITY`).
-- (Phase 7) **Rideable animals:** `AnimalSystem` (`systems/animal-system.ts`) streams a first rideable creature (`entities/animal.ts` config: `speed`, `jumpPower`, `stability`, `ability`) deterministically per `ANIMAL_SLOT_WIDTH` slot and recycles it through a pooled `StaticGroup`. Contact mounts it (consumed for the run).
-- (Phase 7) **Mounted movement:** speed scales move/air velocity (`speed`), jump uses `jumpPower`, landing tolerance widens by `stability`, and the `doubleJump` ability grants one extra mid-air jump. A too-steep landing while mounted **dismounts** (loses the animal) instead of crashing; a normal crash still stuns/game-overs.
+- (Phase 7) **Rideable animals:** `AnimalSystem` (`systems/animal-system.ts`) streams a first rideable creature (`entities/animal.ts` config: `speed`, `jumpPower`, `ability`, `body`) deterministically per `ANIMAL_SLOT_WIDTH` slot and recycles it through a pooled `StaticGroup`. Contact mounts it (consumed for the run).
+- (Phase 7) **Mounted movement:** `speed` scales grounded and air velocity, `jumpPower` replaces the jump, and `doubleJump` grants one extra mid-air jump. A mount lasts `WOLF_RIDE_DISTANCE` px and then bolts (D14 removed the bad-landing dismount that used to end it).
 - (Phase 8) **Score + combo:** `ScoreSystem` (`systems/score-system.ts`) aggregates distance, coins, air time, flips and successful landings, then multiplies by a `ComboSystem` (`systems/combo-system.ts`) multiplier that grows on successful landings/flips and resets on a crash/dismount.
 - (Phase 8) **Coins:** `CoinSystem` (`systems/coin-system.ts`) streams pooled, non-blocking coin pickups above the contour per `COIN_SLOT_WIDTH` slot; overlap collects them for points. Multi-line HUD shows score/coins/combo; the game-over overlay shows the final score.
 - (Phase 9) **Difficulty scaling:** `DifficultySystem` (`systems/difficulty-system.ts`) derives a 0→1 `progress` from forward distance (`DIFFICULTY_RAMP_DISTANCE`), then scales terrain complexity (amplitude), obstacle/animal density, and downhill speed — all additive, capped bonuses that avoid unfairness. Because it is a pure function of `x`, terrain stays deterministic and streamed chunks remain valid.
@@ -638,7 +652,7 @@ Foreground effects
 
 Keep decorative layers independent from physics.
 
-> Status: DONE (Step 10). `BackgroundSystem` renders sky, clouds, far/mid mountains and foreground snow as `TileSprite` layers pinned to the screen (`setScrollFactor(0)`) with per-layer `tilePositionX` multipliers, so they parallax infinitely without world objects or physics bodies. Camera follow was already in place. Deferred: weather (fog/snowfall overlay) belongs with Phase 11 particles; background art is placeholder.
+> Status: DONE (Step 10). `BackgroundSystem` renders sky, clouds, distant/near treelines and the foreground snow lip as `TileSprite` layers pinned to the screen (`setScrollFactor(0)`) with per-layer `tilePositionX` multipliers, so they parallax infinitely without world objects or physics bodies. Camera follow was already in place. Updated in Step 15: the far/mid mountain placeholders became cropped Kenney tree bands (`bg-trees-far` / `bg-trees-near`), because Kenney's `background_*.png` files are opaque 256x256 scenes that must be cropped to their scenery band before they can be layered. Still deferred: a weather (fog) overlay beyond the particle snowfall.
 
 ---
 
@@ -827,6 +841,19 @@ final art direction
 This prevents spending time making the game look good before the gameplay works.
 
 > Decision D6: until real assets are added, placeholder textures are generated at runtime in `BootScene` via `graphics.generateTexture()` (simple rectangles / temporary sprites from the progression above).
+
+> Superseded by D9–D13: the placeholders have now been replaced with curated Kenney CC0 art. `BootScene` only ever drew the wolf (D10); every other texture is a real file.
+
+## 7.1 Curated production assets (what shipped)
+
+The final art pass replaced every runtime placeholder with 30 real files under `public/assets/game-3/`. Provenance and licences are recorded per file in `ASSETS.md` at the repo root.
+
+The raw Kenney extracts were ~4,500 files / 25 MB, almost all unused, so they are not committed (`art-source/kenney/` is git-ignored). `art-source/tools/curate-game3-assets.ps1` regenerates the shipped set from a fresh extract and aborts with instructions if the sources are absent.
+
+Two rules keep the set honest:
+
+1. **1:1 key-to-file.** Every value in `entities/asset-keys.ts` maps to exactly one path in `asset-specs.ts`, and every shipped PNG is referenced. No orphans, no unused files.
+2. **Curate, do not ship raw.** Kenney sprites sit in oversized transparent canvases (78x98 of art inside 128x128; ~380x380 particles inside 512x512), which would break sprite origins and Arcade bodies. The script alpha-trims, pads the player frames onto one shared 84x98 canvas, and crops opaque backgrounds into bands.
 
 ---
 
@@ -1132,6 +1159,43 @@ Used for:
 ```
 
 This is especially important for assets from itch.io/OpenGameArt where licenses vary.
+
+## 17.1 What actually shipped
+
+```text
+public/
+├── assets/
+│   ├── dude.png, sky.png, platform.png, star.png, bomb.png   <- game-2, untouched
+│   └── game-3/                                              <- 30 curated files
+│       ├── player/        6 skier_*.png
+│       ├── terrain/       5 snow_crust{,_left,_right}.png, snow_strip.png, ramp.png
+│       ├── obstacles/     5 tree_snow.png, tree_bare.png, rock.png, snowdrift.png, snowbush.png
+│       ├── collectibles/  1 coin_gold.png
+│       ├── background/    4 sky.png, clouds.png, trees_far.png, trees_near.png
+│       ├── effects/       3 particle_{snow,star,smoke}.png
+│       ├── ui/            3 panel_dark.png, round.png, banner.png
+│       └── fonts/         3 Kenney *.ttf
+└── sounds/                <- already curated in the audio pass, unchanged
+
+art-source/
+├── kenney/                <- git-ignored raw pack extracts (re-extract to regenerate)
+└── tools/
+    ├── curate-game3-assets.ps1   <- trim / pad / band-crop pipeline
+    └── ascii-mask.ps1            <- alpha + luma inspection helper
+
+ASSETS.md                  <- repo root: per-file source, author, licence, URL, usage
+```
+
+Two deviations from the suggested tree above:
+
+- **`audio/` and `fonts/` are siblings of `assets/`, not children.** Angular's
+  asset pipeline copies `public/` verbatim, so a flatter tree avoids nesting
+  that nothing reads.
+- **`animals/` does not exist.** No Kenney pack ships a wolf, so it is drawn
+  with the Graphics API in `BootScene` (D10) and documented as original art.
+
+`ASSETS.md` follows the `Asset / Source / Author / License / URL / Used for`
+template above, one row per shipped file, plus the pack-level licence table.
 
 ---
 

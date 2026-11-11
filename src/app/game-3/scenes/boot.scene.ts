@@ -1,126 +1,117 @@
 import * as Phaser from 'phaser';
-import { ASSET_KEYS } from '../asset-keys';
+import { ASSET_KEYS } from '../entities/asset-keys';
+import { WOLF_TEXTURE_HEIGHT, WOLF_TEXTURE_WIDTH } from '../game-tunbles';
 
+/**
+ * Boot runs before any file is loaded, so it can only paint textures with the
+ * graphics API.
+ *
+ * Decision D6 replaced every placeholder with real CC0 art; the only thing
+ * still drawn at runtime is the wolf, because no Kenney pack ships one
+ * (decision D10). That art is original to this project - see ASSETS.md.
+ */
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('BootScene');
   }
 
   create(): void {
-    this.generatePlaceholderTextures();
+    this.drawWolfTexture();
     this.scene.start('PreloadScene');
   }
 
-  private generatePlaceholderTextures(): void {
+  /**
+   * Paints a side-on wolf facing right. Built from layered shapes with a dark
+   * outline so it reads clearly against both the white snow fill and the green
+   * near treeline.
+   */
+  private drawWolfTexture(): void {
+    const w = WOLF_TEXTURE_WIDTH;
+    const h = WOLF_TEXTURE_HEIGHT;
     const graphics = this.add.graphics();
 
-    graphics.fillStyle(0x22c55e, 1);
-    graphics.fillRoundedRect(0, 0, 32, 32, 6);
-    graphics.generateTexture(ASSET_KEYS.player, 32, 32);
+    const outline = 0x2f2a26;
+    const fur = 0x8d99ae;
+    const furLight = 0xb8c0d0;
+    const belly = 0xdfe4ec;
 
-    graphics.clear();
-    graphics.fillStyle(0xf8fafc, 1);
-    graphics.fillRect(0, 0, 64, 64);
-    graphics.generateTexture(ASSET_KEYS.snow, 64, 64);
+    // Ground shadow, so the wolf sits on the snow instead of floating.
+    graphics.fillStyle(0x2f2a26, 0.18);
+    graphics.fillEllipse(w * 0.46, h - 3, w * 0.62, 9);
 
-    graphics.clear();
-    graphics.fillStyle(0x7c4a1d, 1);
-    graphics.fillRect(11, 22, 10, 24);
-    graphics.fillStyle(0x166534, 1);
-    graphics.fillTriangle(2, 22, 16, 0, 30, 22);
-    graphics.fillTriangle(5, 34, 16, 14, 27, 34);
-    graphics.generateTexture(ASSET_KEYS.tree, 33, 46);
+    // Tail: bushy wedge sweeping back and up from the haunch.
+    graphics.fillStyle(outline, 1);
+    graphics.fillTriangle(w * 0.16, h * 0.62, w * 0.0, h * 0.22, w * 0.2, h * 0.46);
+    graphics.fillStyle(fur, 1);
+    graphics.fillTriangle(w * 0.17, h * 0.61, w * 0.045, h * 0.28, w * 0.185, h * 0.47);
 
-    graphics.clear();
-    graphics.fillStyle(0x94a3b8, 1);
-    graphics.fillCircle(14, 13, 11);
-    graphics.fillCircle(28, 17, 8);
-    graphics.fillRect(0, 13, 44, 11);
-    graphics.generateTexture(ASSET_KEYS.rock, 44, 24);
+    // Far hind leg.
+    graphics.fillStyle(outline, 1);
+    graphics.fillRoundedRect(w * 0.3, h * 0.62, 11, h * 0.33, 5);
+    graphics.fillStyle(fur, 1);
+    graphics.fillRoundedRect(w * 0.3 + 2, h * 0.62 + 2, 7, h * 0.31 - 2, 4);
 
-    graphics.clear();
-    graphics.fillStyle(0xf1f5f9, 1);
-    graphics.fillCircle(16, 12, 12);
-    graphics.fillCircle(34, 14, 9);
-    graphics.fillRect(0, 12, 48, 12);
-    graphics.generateTexture(ASSET_KEYS.snowPile, 48, 24);
+    // Body: elongated ellipse with a slightly higher haunch.
+    graphics.fillStyle(outline, 1);
+    graphics.fillEllipse(w * 0.5, h * 0.56, w * 0.58, h * 0.46);
+    graphics.fillEllipse(w * 0.33, h * 0.5, w * 0.28, h * 0.34);
+    graphics.fillStyle(fur, 1);
+    graphics.fillEllipse(w * 0.5, h * 0.565, w * 0.54, h * 0.41);
+    graphics.fillEllipse(w * 0.33, h * 0.505, w * 0.245, h * 0.3);
 
-    graphics.clear();
-    graphics.fillStyle(0xbae6fd, 1);
-    graphics.fillTriangle(0, 27, 52, 5, 52, 27);
-    graphics.lineStyle(2, 0x38bdf8, 1);
-    graphics.strokeTriangle(0, 27, 52, 5, 52, 27);
-    graphics.generateTexture(ASSET_KEYS.ramp, 52, 28);
+    // Belly highlight.
+    graphics.fillStyle(belly, 1);
+    graphics.fillEllipse(w * 0.52, h * 0.72, w * 0.4, h * 0.14);
 
-    graphics.clear();
-    graphics.fillStyle(0x64748b, 1);
-    graphics.fillRect(6, 8, 26, 13);
-    graphics.fillRect(9, 20, 4, 8);
-    graphics.fillRect(24, 20, 4, 8);
-    graphics.fillTriangle(32, 8, 44, 13, 32, 21);
-    graphics.fillTriangle(6, 10, 0, 3, 6, 17);
-    graphics.fillStyle(0x0f172a, 1);
-    graphics.fillRect(38, 12, 2, 2);
-    graphics.generateTexture(ASSET_KEYS.wolf, 44, 28);
+    // Near hind leg.
+    graphics.fillStyle(outline, 1);
+    graphics.fillRoundedRect(w * 0.26, h * 0.66, 12, h * 0.3, 5);
+    graphics.fillStyle(furLight, 1);
+    graphics.fillRoundedRect(w * 0.26 + 2, h * 0.66 + 2, 8, h * 0.28 - 2, 4);
 
-    graphics.clear();
-    graphics.fillStyle(0xfacc15, 1);
-    graphics.fillCircle(9, 9, 9);
-    graphics.fillStyle(0xb45309, 1);
-    graphics.fillCircle(9, 9, 4);
-    graphics.generateTexture(ASSET_KEYS.coin, 18, 18);
+    // Front legs.
+    graphics.fillStyle(outline, 1);
+    graphics.fillRoundedRect(w * 0.66, h * 0.64, 10, h * 0.31, 4);
+    graphics.fillRoundedRect(w * 0.74, h * 0.64, 10, h * 0.31, 4);
+    graphics.fillStyle(furLight, 1);
+    graphics.fillRoundedRect(w * 0.66 + 2, h * 0.64 + 2, 6, h * 0.29 - 2, 3);
+    graphics.fillRoundedRect(w * 0.74 + 2, h * 0.64 + 2, 6, h * 0.29 - 2, 3);
 
-    graphics.clear();
-    const skyTop = Phaser.Display.Color.ValueToColor(0x93c5fd);
-    const skyBottom = Phaser.Display.Color.ValueToColor(0xe0f2fe);
-    for (let i = 0; i < 12; i++) {
-      const band = Phaser.Display.Color.Interpolate.ColorWithColor(skyTop, skyBottom, 11, i);
-      graphics.fillStyle(Phaser.Display.Color.GetColor(band.r, band.g, band.b), 1);
-      graphics.fillRect(0, i * 50, 8, 50);
-    }
-    graphics.generateTexture(ASSET_KEYS.bgSky, 8, 600);
+    // Neck + head, raised and facing right.
+    graphics.fillStyle(outline, 1);
+    graphics.fillEllipse(w * 0.79, h * 0.36, w * 0.3, h * 0.3);
+    graphics.fillRoundedRect(w * 0.68, h * 0.4, w * 0.16, h * 0.26, 8);
+    graphics.fillStyle(fur, 1);
+    graphics.fillEllipse(w * 0.79, h * 0.365, w * 0.265, h * 0.265);
+    graphics.fillRoundedRect(w * 0.685, h * 0.41, w * 0.14, h * 0.23, 7);
 
-    graphics.clear();
-    for (let i = 0; i < 4; i++) {
-      const peakX = i * 64 + 32;
-      graphics.fillStyle(0xcbd5e1, 1);
-      graphics.fillTriangle(peakX - 40, 160, peakX, 30, peakX + 40, 160);
-      graphics.fillStyle(0xf8fafc, 1);
-      graphics.fillTriangle(peakX - 14, 66, peakX, 30, peakX + 14, 66);
-    }
-    graphics.generateTexture(ASSET_KEYS.bgFar, 256, 160);
+    // Ears.
+    graphics.fillStyle(outline, 1);
+    graphics.fillTriangle(w * 0.72, h * 0.24, w * 0.76, h * 0.06, w * 0.81, h * 0.25);
+    graphics.fillTriangle(w * 0.82, h * 0.24, w * 0.87, h * 0.09, w * 0.9, h * 0.26);
+    graphics.fillStyle(furLight, 1);
+    graphics.fillTriangle(w * 0.735, h * 0.235, w * 0.762, h * 0.105, w * 0.795, h * 0.243);
+    graphics.fillTriangle(w * 0.833, h * 0.235, w * 0.868, h * 0.13, w * 0.888, h * 0.25);
 
-    graphics.clear();
-    for (let i = 0; i < 4; i++) {
-      const peakX = i * 64 + 32;
-      graphics.fillStyle(0x94a3b8, 1);
-      graphics.fillTriangle(peakX - 44, 140, peakX, 46, peakX + 44, 140);
-      graphics.fillStyle(0xe2e8f0, 1);
-      graphics.fillTriangle(peakX - 12, 74, peakX, 46, peakX + 12, 74);
-    }
-    graphics.generateTexture(ASSET_KEYS.bgMid, 256, 140);
+    // Snout.
+    graphics.fillStyle(outline, 1);
+    graphics.fillRoundedRect(w * 0.86, h * 0.36, w * 0.15, h * 0.16, 7);
+    graphics.fillStyle(furLight, 1);
+    graphics.fillRoundedRect(w * 0.865, h * 0.365, w * 0.135, h * 0.145, 6);
 
-    graphics.clear();
-    graphics.fillStyle(0xffffff, 0.95);
-    graphics.fillCircle(34, 34, 20);
-    graphics.fillCircle(66, 28, 26);
-    graphics.fillCircle(100, 34, 20);
-    graphics.fillRect(20, 34, 100, 20);
-    graphics.generateTexture(ASSET_KEYS.bgCloud, 140, 56);
-
-    graphics.clear();
+    // Eye + nose.
     graphics.fillStyle(0xffffff, 1);
-    graphics.fillCircle(40, 28, 22);
-    graphics.fillCircle(120, 30, 26);
-    graphics.fillCircle(200, 28, 22);
-    graphics.fillRect(0, 28, 256, 12);
-    graphics.generateTexture(ASSET_KEYS.bgSnow, 256, 40);
+    graphics.fillCircle(w * 0.835, h * 0.33, 4.5);
+    graphics.fillStyle(0x1f2937, 1);
+    graphics.fillCircle(w * 0.842, h * 0.33, 2.4);
+    graphics.fillStyle(0x111827, 1);
+    graphics.fillCircle(w * 0.995, h * 0.43, 3.4);
 
-    graphics.clear();
-    graphics.fillStyle(0xffffff, 1);
-    graphics.fillCircle(3, 3, 3);
-    graphics.generateTexture(ASSET_KEYS.particle, 6, 6);
+    // Fur ruff along the back of the neck.
+    graphics.fillStyle(furLight, 1);
+    graphics.fillEllipse(w * 0.7, h * 0.47, w * 0.13, h * 0.2);
 
+    graphics.generateTexture(ASSET_KEYS.wolf, w, h);
     graphics.destroy();
   }
 }

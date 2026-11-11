@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { ASSET_KEYS, FONT_FAMILIES } from '../entities/asset-keys';
 import { TOUCH_BUTTON_RADIUS, TOUCH_SWIPE_JUMP_DISTANCE } from '../game-tunbles';
 
 type MovementKeys = Record<'W' | 'A' | 'S' | 'D', Phaser.Input.Keyboard.Key>;
@@ -95,15 +96,16 @@ export class InputSystem {
     const radius = TOUCH_BUTTON_RADIUS;
 
     this.scene.add
-      .circle(x, y, radius, 0x0f172a, 0.35)
-      .setStrokeStyle(2, 0xe2e8f0, 0.5)
+      .image(x, y, ASSET_KEYS.uiRound)
+      .setDisplaySize(radius * 2 + 8, radius * 2 + 8)
       .setScrollFactor(0)
-      .setDepth(30);
+      .setDepth(30)
+      .setAlpha(0.85);
     this.scene.add
       .text(x, y, label, {
-        fontFamily: 'monospace',
+        fontFamily: FONT_FAMILIES.future,
         fontSize: '18px',
-        color: '#e2e8f0',
+        color: '#f8fafc',
       })
       .setOrigin(0.5)
       .setScrollFactor(0)

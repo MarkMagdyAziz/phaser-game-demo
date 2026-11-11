@@ -19,7 +19,9 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       width: GAME_WIDTH,
       height: GAME_HEIGHT,
     },
-    render: { antialias: false, pixelArt: true, roundPixels: true },
+    // Decision D11: the curated art is Kenney's vector-style work, not pixel art,
+    // so bilinear sampling and texture filtering stay on.
+    render: { antialias: true, pixelArt: false, roundPixels: false },
     physics: {
       default: 'arcade',
       arcade: { gravity: { x: 0, y: 300 }, debug: false },

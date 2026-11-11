@@ -1,8 +1,9 @@
 import { inject, Injectable, PLATFORM_ID } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { createGameConfig } from './game.config';
-import { GAME_EVENTS_KEY, GameEventBus } from './game-events';
+import { GameEventBus } from './game-events';
 import type * as Phaser from 'phaser';
+import { GAME_EVENTS_KEY } from './entities/events';
 
 @Injectable({ providedIn: 'root' })
 export class Game3Service {
